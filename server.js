@@ -1,14 +1,17 @@
 const http=require('http');
 const {WebSocketServer}=require('ws');
 const P=new Map();
+const BASES={};
 let LOTS=[], lotId=1;
 const s=http.createServer((q,r)=>{r.writeHead(200);r.end('online: '+P.size+' lots: '+LOTS.length)});
 const w=new WebSocketServer({server:s});
 const all=o=>{const m=JSON.stringify(o);w.clients.forEach(c=>{if(c.readyState===1)c.send(m)})};
 const sendMarket=()=>all({t:'market',lots:LOTS});
+const sendBases=()=>all({t:'bases',bases:BASES});
 w.on('connection',c=>{
   let n=null;
   c.send(JSON.stringify({t:'market',lots:LOTS}));
+  c.send(JSON.stringify({t:'bases',bases:BASES}));
   c.on('message',d=>{
     let m;try{m=JSON.parse(d)}catch(e){return}
     if(m.t==='hello'){n=String(m.nick||'игрок').slice(0,14);P.set(n,{nick:n,x:0,z:0,yaw:0,seen:Date.now(),ws:c});return}
@@ -17,6 +20,13 @@ w.on('connection',c=>{
     p.seen=Date.now();
     if(m.t==='pos'){p.x=+m.x||0;p.z=+m.z||0;p.yaw=+m.yaw||0}
     else if(m.t==='say')all({t:'say',nick:n,text:String(m.text||'').slice(0,120)});
+    else if(m.t==='claim'){
+      const b=+m.base;
+      if(!(b>=0&&b<6))return;
+      if(BASES[b]&&BASES[b]!==n){c.send(JSON.stringify({t:'claimfail',bases:BASES}));return}
+      Object.keys(BASES).forEach(k=>{if(BASES[k]===n)delete BASES[k]});
+      BASES[b]=n;sendBases();
+    }
     else if(m.t==='sell'){
       const price=Math.max(1,Math.floor(+m.price||0));
       if(!m.part||LOTS.length>200)return;
