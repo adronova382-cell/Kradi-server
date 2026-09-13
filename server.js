@@ -6,14 +6,7 @@ const EV_PERIOD=1800000, EV_LEN=300000, EV_CH=.20;
 const hash01=k=>{const x=Math.sin(k*12.9898)*43758.5453;return x-Math.floor(x)};
 const slotStart=()=>Math.floor(Date.now()/EV_PERIOD)*EV_PERIOD;
 const RAR_CH=[60,25,10.5,3.4,1,.4,.1];
-const PARTS=[
-[0,2,130],[0,3,175],[0,5,265],[0,7,355],
-[1,12,580],[1,18,850],[1,24,1120],[1,30,1390],
-[2,48,2200],[2,62,2830],[2,80,3640],
-[3,900,80000],[3,1500,140000],[3,2200,200000],
-[4,3200,300000],[4,4500,420000],[4,5400,500000],
-[5,7000,620000],[5,9200,780000],
-[6,13000,1000000]];
+const PARTS=[[0,2,130],[0,3,175],[0,5,265],[0,7,355],[1,12,580],[1,18,850],[1,24,1120],[1,30,1390],[2,48,2200],[2,62,2830],[2,80,3640],[3,900,80000],[3,1500,140000],[3,2200,200000],[4,3200,300000],[4,4500,420000],[4,5400,500000],[5,7000,620000],[5,9200,780000],[6,13000,1000000]];
 const NAMES=['Переходник Type-C','Резисторы 1 кОм','LED-лента 1 м','USB-хаб','Реле 5 В','OLED-дисплей','Bluetooth-модуль','Шаговый мотор','Arduino Nano','Wi-Fi модуль ESP','Блок питания 12 В','Raspberry Pi','Тепловизор-модуль','FPGA-плата','Серверный GPU','Квантовый чип','Нейроускоритель','Ядро Демиурга','Плата Творца','Чёрный ящик ???'];
 const KIND=['dongle','chip','strip','dongle','chip','screen','board','motor','board','board','brick','board','screen','board','brick','chip','brick','divine','divine','secret'];
 const COL=[0xb9c2d6,0xc0a080,0x36e0a0,0x8fa0c0,0x4fa3ff,0x2ad4ff,0x2f7fe0,0xd0d6e2,0x2fbfa0,0x9ad6ff,0x7a86a8,0x59d97a,0xff8a3d,0xf0c05a,0xff5d8f,0xc07dff,0xff2f6d,0xfff0a0,0xa0ffe0,0x00ffc8];
@@ -64,6 +57,11 @@ w.on('connection',c=>{
     p.seen=Date.now();
     if(m.t==='pos'){p.x=+m.x||0;p.z=+m.z||0;p.yaw=+m.yaw||0;p.it=m.it||null;p.ad=!!m.ad}
     else if(m.t==='say')all({t:'say',nick:n,text:String(m.text||'').slice(0,120)});
+    else if(m.t==='grant'){
+      const to=P.get(String(m.to||''));
+      if(to&&to.ws&&to.ws.readyState===1)
+        to.ws.send(JSON.stringify({t:'granted',item:String(m.item||''),until:+m.until||0,from:n}));
+    }
     else if(m.t==='claim'){
       const b=+m.base;
       if(!(b>=0&&b<6))return;
