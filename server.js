@@ -1,8 +1,9 @@
 const http=require('http');
 const {WebSocketServer}=require('ws');
-const P=new Map(), BASES={}, BST={};
+const P=new Map(), BASES={}, BST={}, GUARD={}, SAFE={}, FLOORS={};
 let LOTS=[], lotId=1, FORCED={}, SKIP=null, BELT=[], sid=1;
 const EV_PERIOD=1800000, EV_LEN=300000, EV_CH=.20;
+const NIGHT_EVERY=3600000, NIGHT_LEN=600000;
 const hash01=k=>{const x=Math.sin(k*12.9898)*43758.5453;return x-Math.floor(x)};
 const slotStart=()=>Math.floor(Date.now()/EV_PERIOD)*EV_PERIOD;
 const RAR_CH=[60,25,10.5,3.4,1,.4,.1];
@@ -18,6 +19,8 @@ function evs(){
     else if(r<EV_CH*2)out.push({id:'crab',until:st+EV_LEN,src:'slot'});
     else if(r<EV_CH*2+.05)out.push({id:'space',until:st+EV_LEN,src:'slot'});
   }
+  const hs=Math.floor(now/NIGHT_EVERY)*NIGHT_EVERY;
+  if(now-hs<NIGHT_LEN)out.push({id:'night',until:hs+NIGHT_LEN,src:'slot'});
   Object.keys(FORCED).forEach(id=>{
     if(FORCED[id]>now){
       const e=out.find(x=>x.id===id);
@@ -48,6 +51,7 @@ w.on('connection',c=>{
   c.send(JSON.stringify({t:'market',lots:LOTS}));
   c.send(JSON.stringify({t:'bases',bases:BASES}));
   c.send(JSON.stringify({t:'basestate',state:BST}));
+  c.send(JSON.stringify({t:'guards',guard:GUARD,safe:SAFE,fl:FLOORS}));
   c.send(JSON.stringify({t:'events',list:evs()}));
   c.on('message',d=>{
     let m;try{m=JSON.parse(d)}catch(e){return}
@@ -62,6 +66,22 @@ w.on('connection',c=>{
       if(to&&to.ws&&to.ws.readyState===1)
         to.ws.send(JSON.stringify({t:'granted',item:String(m.item||''),until:+m.until||0,from:n}));
     }
+    else if(m.t==='jam'){
+      const to=P.get(String(m.to||''));
+      if(to&&to.ws&&to.ws.readyState===1)to.ws.send(JSON.stringify({t:'jam'}));
+    }
+    else if(m.t==='hit'){
+      const to=P.get(String(m.to||''));
+      if(to&&to.ws&&to.ws.readyState===1)to.ws.send(JSON.stringify({t:'hit',by:n}));
+    }
+    else if(m.t==='lasers'){all({t:'lasers',base:+m.base})}
+    else if(m.t==='return'){
+      const b=+m.base;
+      if(!BST[b]||!m.part)return;
+      const free=BST[b].findIndex(x=>!x);
+      if(free>=0)BST[b][free]=m.part;
+      all({t:'basestate',state:BST});
+    }
     else if(m.t==='claim'){
       const b=+m.base;
       if(!(b>=0&&b<6))return;
@@ -72,17 +92,22 @@ w.on('connection',c=>{
     else if(m.t==='base'){
       const b=+m.base;
       if(BASES[b]!==n)return;
-      BST[b]=Array.isArray(m.slots)?m.slots.slice(0,12):[];
+      BST[b]=Array.isArray(m.slots)?m.slots.slice(0,24):[];
+      GUARD[b]=!!m.guard;
+      FLOORS[b]=Math.max(1,Math.min(3,+m.fl||1));
+      if(+m.safe>=0)SAFE[b]=+m.safe; else delete SAFE[b];
       all({t:'basestate',state:BST});
+      all({t:'guards',guard:GUARD,safe:SAFE,fl:FLOORS});
     }
     else if(m.t==='steal'){
       const b=+m.base, i=+m.idx;
       if(!BST[b]||!BST[b][i])return;
+      if(SAFE[b]===i)return;
       const part=BST[b][i];BST[b][i]=null;
-      c.send(JSON.stringify({t:'stolen',part}));
+      c.send(JSON.stringify({t:'stolen',part,base:b}));
       const vic=P.get(BASES[b]);
       if(vic&&vic.ws&&vic.ws.readyState===1)
-        vic.ws.send(JSON.stringify({t:'robbed',who:n,name:(part&&part.n)||'схема'}));
+        vic.ws.send(JSON.stringify({t:'robbed',who:m.anon?'неизвестный':n,name:(part&&part.n)||'схема'}));
       all({t:'basestate',state:BST});
     }
     else if(m.t==='take'){
