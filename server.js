@@ -59,8 +59,9 @@ w.on('connection',c=>{
     if(!n)return;
     const p=P.get(n);if(!p)return;
     p.seen=Date.now();
-    if(m.t==='pos'){p.x=+m.x||0;p.z=+m.z||0;p.yaw=+m.yaw||0;p.it=m.it||null;p.ad=!!m.ad}
+    if(m.t==='pos'){p.x=+m.x||0;p.z=+m.z||0;p.yaw=+m.yaw||0;p.it=m.it||null;p.ad=!!m.ad;p.cr=+m.cr||0}
     else if(m.t==='say')all({t:'say',nick:n,text:String(m.text||'').slice(0,120)});
+    else if(m.t==='stealing')all({t:'stealing',base:+m.base,idx:+m.idx,on:m.on?1:0,who:n});
     else if(m.t==='grant'){
       const to=P.get(String(m.to||''));
       if(to&&to.ws&&to.ws.readyState===1)
@@ -74,7 +75,7 @@ w.on('connection',c=>{
       const to=P.get(String(m.to||''));
       if(to&&to.ws&&to.ws.readyState===1)to.ws.send(JSON.stringify({t:'hit',by:n}));
     }
-    else if(m.t==='lasers'){all({t:'lasers',base:+m.base})}
+    else if(m.t==='lasers')all({t:'lasers',base:+m.base});
     else if(m.t==='return'){
       const b=+m.base;
       if(!BST[b]||!m.part)return;
@@ -101,6 +102,7 @@ w.on('connection',c=>{
     }
     else if(m.t==='steal'){
       const b=+m.base, i=+m.idx;
+      all({t:'stealing',base:b,idx:i,on:0,who:n});
       if(!BST[b]||!BST[b][i])return;
       if(SAFE[b]===i)return;
       const part=BST[b][i];BST[b][i]=null;
@@ -146,7 +148,7 @@ w.on('connection',c=>{
 setInterval(()=>{
   const t=Date.now();
   P.forEach((p,k)=>{if(t-p.seen>6000)P.delete(k)});
-  if(P.size)all({t:'state',players:[...P.values()].map(p=>({nick:p.nick,x:p.x,z:p.z,yaw:p.yaw,it:p.it,ad:p.ad}))});
+  if(P.size)all({t:'state',players:[...P.values()].map(p=>({nick:p.nick,x:p.x,z:p.z,yaw:p.yaw,it:p.it,ad:p.ad,cr:p.cr||0}))});
 },80);
 setInterval(()=>{
   if(!P.size)return;
