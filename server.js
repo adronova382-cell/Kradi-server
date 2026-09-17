@@ -55,13 +55,21 @@ w.on('connection',c=>{
   c.send(JSON.stringify({t:'events',list:evs()}));
   c.on('message',d=>{
     let m;try{m=JSON.parse(d)}catch(e){return}
-    if(m.t==='hello'){n=String(m.nick||'игрок').slice(0,14);P.set(n,{nick:n,x:0,z:0,yaw:0,it:null,ad:false,seen:Date.now(),ws:c});return}
+    if(m.t==='hello'){n=String(m.nick||'игрок').slice(0,14);P.set(n,{nick:n,x:0,z:0,yaw:0,it:null,ad:false,cr:0,seen:Date.now(),ws:c});return}
     if(!n)return;
     const p=P.get(n);if(!p)return;
     p.seen=Date.now();
     if(m.t==='pos'){p.x=+m.x||0;p.z=+m.z||0;p.yaw=+m.yaw||0;p.it=m.it||null;p.ad=!!m.ad;p.cr=+m.cr||0}
     else if(m.t==='say')all({t:'say',nick:n,text:String(m.text||'').slice(0,120)});
     else if(m.t==='stealing')all({t:'stealing',base:+m.base,idx:+m.idx,on:m.on?1:0,who:n});
+    else if(m.t==='release'){
+      Object.keys(BASES).forEach(k=>{
+        if(BASES[k]===n){delete BASES[k];delete BST[k];delete GUARD[k];delete SAFE[k];delete FLOORS[k]}
+      });
+      all({t:'bases',bases:BASES});
+      all({t:'basestate',state:BST});
+      all({t:'guards',guard:GUARD,safe:SAFE,fl:FLOORS});
+    }
     else if(m.t==='grant'){
       const to=P.get(String(m.to||''));
       if(to&&to.ws&&to.ws.readyState===1)
